@@ -29,4 +29,5 @@ scripts/setup-*.mjs
 scripts/migrate-*.mjs
 scripts/sync-*.mjs
 scripts/open-album-testing.mjs
+scripts/update-wallet-heading.mjs
 public/sonic-hero.png
