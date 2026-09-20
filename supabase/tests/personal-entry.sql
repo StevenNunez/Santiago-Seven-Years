@@ -1,0 +1,35 @@
+begin;
+select set_config('birthday.entry_user',gen_random_uuid()::text,true);
+select set_config('birthday.entry_invite',gen_random_uuid()::text,true);
+select set_config('birthday.entry_token',encode(extensions.gen_random_bytes(32),'hex'),true);
+select set_config('birthday.entry_code',upper(encode(extensions.gen_random_bytes(10),'hex')),true);
+insert into auth.users(id) values(current_setting('birthday.entry_user')::uuid);
+insert into public.invitations(id,recipient_name,token,access_code) values(current_setting('birthday.entry_invite')::uuid,'Steven Prueba',current_setting('birthday.entry_token'),current_setting('birthday.entry_code'));
+select set_config('request.jwt.claims',json_build_object('sub',current_setting('birthday.entry_user'),'role','authenticated')::text,true);
+set local role authenticated;
+do $$ begin
+  if public.resolve_guest_code(current_setting('birthday.entry_code'))<>current_setting('birthday.entry_token') then raise exception 'FAIL: personal code resolution'; end if;
+  if public.resolve_guest_code(current_setting('birthday.entry_code')) is not null then raise exception 'FAIL: code lookup cooldown'; end if;
+end $$;
+select public.join_invitation(current_setting('birthday.entry_token'));
+select public.save_my_rsvp('Someone else',true,1,1,'');
+do $$ begin
+  if (select family_name from public.get_my_rsvp())<>'Steven Prueba' then raise exception 'FAIL: RSVP identity spoofing'; end if;
+  if public.can_view_album() then raise exception 'FAIL: RSVP automatically grants album'; end if;
+  if public.unlock_personal_album('WRONG') then raise exception 'FAIL: wrong code'; end if;
+  if not public.unlock_personal_album(current_setting('birthday.entry_code')) then raise exception 'FAIL: correct code'; end if;
+  if not public.can_view_album() then raise exception 'FAIL: album remains locked'; end if;
+  if (select display_name from public.profiles where user_id=auth.uid())<>'Steven Prueba' then raise exception 'FAIL: photo author identity'; end if;
+end $$;
+reset role;
+update public.event_settings set uploads_open_at=now()-interval '1 hour',uploads_close_at=now()+interval '7 days' where id='santiago-7';
+set local role authenticated;
+do $$ begin if not public.arrive_at_party() then raise exception 'FAIL: arrival on party day'; end if; end $$;
+reset role;
+do $$ begin if (select checked_in_at from public.invitations where id=current_setting('birthday.entry_invite')::uuid) is null then raise exception 'FAIL: arrival not recorded'; end if; end $$;
+update public.invitations set active=false where id=current_setting('birthday.entry_invite')::uuid;
+set local role authenticated;
+do $$ begin if public.can_view_album() then raise exception 'FAIL: revoked invitation accesses album'; end if; end $$;
+reset role;
+rollback;
+select 'PASS: personal codes, cooldown, fixed RSVP identity, album code verification, arrival and revocation' as result;

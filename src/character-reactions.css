@@ -1,0 +1,28 @@
+.character-stage{position:relative;display:grid;place-items:center;isolation:isolate;pointer-events:none}
+.character-stage img{transform-origin:50% 85%;transition:transform .25s ease}
+.character-touch{touch-action:manipulation;overflow:visible}
+.character-touch:focus-visible{outline:3px solid #e5a51e;outline-offset:6px}
+.character-touch .character-stage img,.pocket-silver img{mix-blend-mode:normal;border-radius:0;object-fit:contain;filter:drop-shadow(0 8px 7px #17345c20)}
+.entry-sonic{background:none;box-shadow:none;border-radius:0}
+.entry-sonic img,.runner-player img{mix-blend-mode:normal;border-radius:0;filter:drop-shadow(0 6px 8px #00184455)}
+.player-aura{inset:25% 5% -5%;opacity:.45;filter:blur(12px)}
+.run-eggman,.run-super{object-fit:contain;mix-blend-mode:normal;filter:drop-shadow(0 5px 9px #0005)}
+.run-super{animation:character-arrive .7s ease-out both}
+@keyframes character-arrive{from{opacity:0;transform:translateY(15px) scale(.85)}to{opacity:1;transform:translateY(0) scale(1)}}
+.character-burst{position:absolute;inset:0;pointer-events:none;z-index:2;color:#e7a40c;font-size:26px}
+.character-burst i{position:absolute;left:50%;top:48%;font-style:normal;opacity:0;animation:character-spark .85s ease-out both;--dx:-65px;--dy:-45px}
+.character-burst i:nth-child(2){--dx:55px;--dy:-60px;animation-delay:.05s}
+.character-burst i:nth-child(3){--dx:-50px;--dy:30px;animation-delay:.1s}
+.character-burst i:nth-child(4){--dx:60px;--dy:30px;animation-delay:.08s}
+.character-burst i:nth-child(5){--dx:0px;--dy:-90px;animation-delay:.13s}
+.moment-amy .character-burst{color:#e42b66}
+.moment-knuckles .character-burst{color:#e12e3e}
+.character-reacting img{animation:character-hop .9s ease-in-out}
+.moment-knuckles .character-reacting img{animation:character-stomp .7s ease-out}
+.moment-amy .character-reacting img{animation:character-cheer .9s ease-in-out}
+@keyframes character-hop{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-18px) rotate(-8deg)}65%{transform:translateY(-8px) rotate(6deg)}85%{transform:translateY(2px) scale(1.03,.97)}}
+@keyframes character-stomp{0%,100%{transform:translateY(0) rotate(0)}25%{transform:translateY(-10px) rotate(-6deg)}50%{transform:translateY(5px) scale(1.05,.95)}65%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+@keyframes character-cheer{0%,100%{transform:rotate(0)}20%{transform:rotate(-9deg) translateY(-5px)}45%{transform:rotate(9deg) translateY(-10px)}70%{transform:rotate(-5deg) translateY(-4px)}}
+@keyframes character-spark{0%{opacity:0;transform:translate(-50%,0) scale(.3)}20%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1.1)}}
+@media(hover:hover) and (prefers-reduced-motion:no-preference){.character-touch:hover .character-stage:not(.character-reacting) img{transform:translateY(-5px) rotate(-3deg)}}
+@media(prefers-reduced-motion:reduce){.character-stage img{animation:none!important;transition:none!important}.character-burst{display:none}}

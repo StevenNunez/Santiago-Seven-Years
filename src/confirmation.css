@@ -1,0 +1,5 @@
+.confirmed-card{display:flex;flex-direction:column;align-items:flex-start;gap:14px;border:2px solid #d5e9ff}
+.confirmed-card>svg{color:#14784c}.confirmed-card .eyebrow{color:#14784c;font-size:11px;letter-spacing:1px}
+.confirmed-card h3,.confirmed-card p{margin:0}.confirmed-card .button{width:100%;justify-content:center}
+.confirmed-card .text-link{min-height:44px;background:none;border:0;text-decoration:underline;cursor:pointer}
+#mi-wallet,#confirmar{scroll-margin-top:90px}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/invitations/delete.js": { "maxDuration": 60 },
+    "api/wallet.js": { "maxDuration": 60 },
+    "api/cron/reminders.js": { "maxDuration": 60 },
+    "api/push/test.js": { "maxDuration": 30 },
+    "api/invitations/email.js": {
+      "maxDuration": 60,
+      "includeFiles": "public/share.jpg"
+    }
+  },
+  "crons": [{ "path": "/api/cron/reminders", "schedule": "0 13 * * *" }],
+  "headers": [
+    { "source": "/(.*)", "headers": [
+      { "key": "Referrer-Policy", "value": "no-referrer" },
+      { "key": "X-Content-Type-Options", "value": "nosniff" },
+      { "key": "X-Frame-Options", "value": "DENY" }
+    ] },
+    { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    { "source": "/push-worker.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    { "source": "/api/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
+  ]
+}
