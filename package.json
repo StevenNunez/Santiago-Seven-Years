@@ -13,7 +13,8 @@
     "start": "node server/index.mjs",
     "lint": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
-    "assets": "node scripts/assets.mjs"
+    "assets": "node scripts/assets.mjs",
+    "niveles": "node scripts/niveles.mjs"
   },
   "dependencies": {
     "@fontsource-variable/nunito": "^5.2.0",

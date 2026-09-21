@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, Heart, ImagePlus, LoaderCircle, MessageCircle, RefreshCw, Send, Trash2 } from 'lucide-react';
 import { db, errorMessage } from './supabase';
-import { preparePhoto } from './photos';
+import { forgetSignedUrls, preparePhoto, signedUrls, thumbPath } from './photos';
 import { niceDate, uploadState } from './domain';
 import PushPreferences from './PushPreferences';
 import type { Comment, EventSettings, Like, Photo, Profile } from './domain';
@@ -32,13 +32,14 @@ export default function Feed({ profile, event }: { profile: Profile; event: Even
       let fetchedComments: Comment[] = []; let fetchedLikes: Like[] = []; let signed: Photo[] = [];
       if (visible.length) {
         const [urls, commentRows, likeRows] = await Promise.all([
-          db().storage.from('memories').createSignedUrls(visible.map(p => p.storage_path), 300),
+          signedUrls(visible.flatMap(p => [p.storage_path, thumbPath(p.storage_path)])),
           db().from('comments').select('*,profiles!comments_user_id_fkey(display_name)').in('photo_id', visible.map(p => p.id)).order('created_at').limit(1000),
           db().from('likes').select('*').in('photo_id', visible.map(p => p.id)).limit(1000),
         ]);
-        if (urls.error) throw urls.error; if (commentRows.error) throw commentRows.error; if (likeRows.error) throw likeRows.error;
-        if (urls.data.some(u => u.error)) throw new Error('No se pudieron cargar algunas fotos. Intenta actualizar el álbum.');
-        signed = visible.map((p, i) => ({ ...p, url: urls.data[i].signedUrl ?? undefined }));
+        if (commentRows.error) throw commentRows.error; if (likeRows.error) throw likeRows.error;
+        if (visible.some(p => !urls.get(p.storage_path))) throw new Error('No se pudieron cargar algunas fotos. Intenta actualizar el álbum.');
+        // Photos published before thumbnails existed fall back to their full image.
+        signed = visible.map(p => ({ ...p, url: urls.get(p.storage_path), thumb: urls.get(thumbPath(p.storage_path)) ?? urls.get(p.storage_path) }));
         fetchedComments = commentRows.data as unknown as Comment[]; fetchedLikes = likeRows.data as Like[];
       }
       if (current !== request.current) return;
@@ -65,12 +66,15 @@ export default function Feed({ profile, event }: { profile: Profile; event: Even
   async function publish() {
     if (!file || busy) return; setBusy(true); setError(''); setStatus('Preparando tu foto…');
     try {
-      const blob = await preparePhoto(file); const id = crypto.randomUUID(); const path = `${profile.user_id}/${id}.jpg`;
+      const photo = await preparePhoto(file); const id = crypto.randomUUID(); const path = `${profile.user_id}/${id}.jpg`;
       setStatus('Subiendo tu recuerdo…');
-      const { error: uploadError } = await db().storage.from('memories').upload(path, blob, { contentType: 'image/jpeg', upsert: false });
-      if (uploadError) throw uploadError;
+      const [full, thumb] = await Promise.all([
+        db().storage.from('memories').upload(path, photo.full, { contentType: 'image/jpeg', upsert: false }),
+        db().storage.from('memories').upload(thumbPath(path), photo.thumb, { contentType: 'image/jpeg', upsert: false }),
+      ]);
+      if (full.error || thumb.error) { await db().storage.from('memories').remove([path, thumbPath(path)]); throw full.error ?? thumb.error; }
       const { error } = await db().from('photos').insert({ id, user_id: profile.user_id, storage_path: path, caption: caption.trim() });
-      if (error) { await db().storage.from('memories').remove([path]); throw error; }
+      if (error) { await db().storage.from('memories').remove([path, thumbPath(path)]); throw error; }
       setFile(null); setCaption(''); setComposer(false); setStatus('¡Tu foto ya está publicada en el muro!'); await refresh();
     } catch (e) { setError(errorMessage(e)); setStatus(''); } finally { setBusy(false); }
   }
@@ -78,8 +82,9 @@ export default function Feed({ profile, event }: { profile: Profile; event: Even
     if (!pendingDelete) return; setBusy(true); setError('');
     try {
       // Delete storage first so a failed storage operation cannot leave an inaccessible orphan.
-      const { error: storageError } = await db().storage.from('memories').remove([pendingDelete.storage_path]);
-      if (storageError) throw storageError;
+      const paths = [pendingDelete.storage_path, thumbPath(pendingDelete.storage_path)];
+      const { error: storageError } = await db().storage.from('memories').remove(paths);
+      if (storageError) throw storageError; forgetSignedUrls(paths);
       const { error } = await db().from('photos').delete().eq('id', pendingDelete.id);
       if (error) throw error;
       setPendingDelete(null); await refresh();
@@ -112,7 +117,7 @@ function PhotoCard({ photo, profile, comments, likes, open, refresh, onDelete }:
     catch (e) { setError(errorMessage(e)); return false; } finally { setBusy(false); }
   }
   return <article className="photo-card card" aria-label={`Publicación de ${photo.profiles.display_name}`}><div className="photo-header"><span className="avatar">{photo.profiles.display_name.slice(0, 1).toUpperCase()}</span><div><strong>{photo.profiles.display_name}</strong><small>{niceDate(photo.created_at)} · {new Intl.DateTimeFormat("es-CL", { hour: "2-digit", minute: "2-digit", timeZone: "America/Santiago" }).format(new Date(photo.created_at))}</small></div>{(profile.role === 'admin' || photo.user_id === profile.user_id) && <button className="icon-button delete-photo" aria-label="Eliminar foto" onClick={onDelete}><Trash2 size={17} /></button>}</div>
-    <a href={photo.url} target="_blank" rel="noreferrer" aria-label={`Abrir foto de ${photo.profiles.display_name}`}><img className="feed-photo" src={photo.url} alt={photo.caption || `Recuerdo compartido por ${photo.profiles.display_name}`} loading="lazy" /></a>
+    <a href={photo.url} target="_blank" rel="noreferrer" aria-label={`Abrir foto de ${photo.profiles.display_name}`}><img className="feed-photo" src={photo.thumb ?? photo.url} alt={photo.caption || `Recuerdo compartido por ${photo.profiles.display_name}`} loading="lazy" decoding="async" /></a>
     <div className="photo-body">{photo.caption && <p>{photo.caption}</p>}<div className="photo-actions"><button className={liked ? 'reaction liked' : 'reaction'} aria-label={liked ? 'Quitar me gusta' : 'Me gusta'} aria-pressed={liked} disabled={busy || (!open && !liked)} onClick={() => void act(() => liked ? db().from('likes').delete().eq('photo_id', photo.id).eq('user_id', profile.user_id) : db().from('likes').insert({ photo_id: photo.id, user_id: profile.user_id }))}><Heart size={20} fill={liked ? 'currentColor' : 'none'} />{likes.length} <span>Me gusta</span></button><button className="reaction" onClick={() => setShowComments(!showComments)} aria-expanded={showComments}><MessageCircle size={20} />{comments.length} <span>comentarios</span></button></div>
       {!showComments && comments.length > 0 && <div className="wall-comment-preview"><strong>{comments[comments.length - 1].profiles.display_name}</strong> {comments[comments.length - 1].body}</div>}
       {showComments && <div className="comments">{comments.map(comment => <div className="comment" key={comment.id}><div><strong>{comment.profiles.display_name}</strong><p>{comment.body}</p></div>{(comment.user_id === profile.user_id || profile.role === 'admin') && <button disabled={busy} className="icon-button" aria-label="Eliminar comentario" onClick={() => { if (window.confirm('¿Eliminar este comentario?')) void act(() => db().from('comments').delete().eq('id', comment.id)); }}><Trash2 size={14} /></button>}</div>)}{open && <form className="comment-form" onSubmit={async e => { e.preventDefault(); if (!body.trim()) return; const ok = await act(() => db().from('comments').insert({ photo_id: photo.id, user_id: profile.user_id, body: body.trim() })); if (ok) setBody(''); }}><input aria-label="Escribe un comentario" required maxLength={500} value={body} onChange={e => setBody(e.target.value)} placeholder="Deja un poquito de cariño…" /><button className="icon-button" aria-label="Publicar comentario" disabled={busy || !body.trim()}><Send size={18} /></button></form>}</div>}

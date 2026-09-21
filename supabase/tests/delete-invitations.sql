@@ -34,7 +34,7 @@ begin
   if exists(select 1 from public.invitations where id=inv) or exists(select 1 from public.profiles where user_id=g) or exists(select 1 from public.rsvps where invitation_id=inv) or exists(select 1 from public.photos where id=photo) then raise exception 'FAIL incomplete deletion';end if;
   if exists(select 1 from public.comments where user_id=g or photo_id=photo) or exists(select 1 from public.likes where user_id=g or photo_id=photo) then raise exception 'FAIL comments/likes remain';end if;
   if not exists(select 1 from public.invitations where id=other_inv) or not exists(select 1 from public.photos where id=other_photo) or not exists(select 1 from public.comments where photo_id=other_photo and user_id=other_guest) or not exists(select 1 from public.rsvps where invitation_id=other_inv) then raise exception 'FAIL unrelated content changed';end if;
-  if not exists(select 1 from public.invitation_cleanup where invitation_id=inv and storage_paths=array[g||'/demo.jpg'] and wallet_serial='demo-serial') then raise exception 'FAIL cleanup queue';end if;
+  if not exists(select 1 from public.invitation_cleanup where invitation_id=inv and storage_paths=array[g||'/demo.jpg',g||'/demo.thumb.jpg'] and wallet_serial='demo-serial') then raise exception 'FAIL cleanup queue';end if;
   if exists(select 1 from public.resolve_invitation_entry(token)) then raise exception 'FAIL deleted link';end if;
   perform set_config('request.jwt.claims',json_build_object('sub',g,'role','authenticated')::text,true);
   if public.is_guest() then raise exception 'FAIL legacy access granted';end if;

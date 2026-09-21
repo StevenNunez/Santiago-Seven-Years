@@ -19,7 +19,10 @@ import { download } from './photos';
 import { errorMessage, supabase } from './supabase';
 const Feed = lazy(() => import('./Feed'));
 const Admin = lazy(() => import('./Admin'));
-type Tab = 'invitation' | 'memories' | 'admin';
+const LevelsShow = lazy(() => import('./LevelsShow'));
+type Tab = 'invitation' | 'memories' | 'admin' | 'levels';
+// Organizer-only routes never open from a guest link or preview.
+function tabFromHash(hash: string, guestView: boolean): Tab { if (!guestView && hash === '#organizar') return 'admin'; if (!guestView && hash === '#niveles') return 'levels'; return hash === '#recuerdos' ? 'memories' : 'invitation'; }
 
 export default function App() {
   const account = useParty();
@@ -35,16 +38,16 @@ export default function App() {
     details: personal.token ? personal.invitation : account.details,
     loading: account.loading || personal.loading,
   };
-  const [tab, setTab] = useState<Tab>(location.hash === '#organizar' && !guestView ? 'admin' : location.hash === '#recuerdos' ? 'memories' : 'invitation');
+  const [tab, setTab] = useState<Tab>(tabFromHash(location.hash, guestView));
   const [now, setNow] = useState(Date.now()); const [online, setOnline] = useState(navigator.onLine); const [notice, setNotice] = useState('');
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
     const connectivity = () => setOnline(navigator.onLine);
-    const hash = () => { setTab(location.hash === '#organizar' && !guestView ? 'admin' : location.hash === '#recuerdos' ? 'memories' : 'invitation'); };
+    const hash = () => { setTab(tabFromHash(location.hash, guestView)); };
     window.addEventListener('online', connectivity); window.addEventListener('offline', connectivity); window.addEventListener('hashchange', hash);
     return () => { clearInterval(timer); window.removeEventListener('online', connectivity); window.removeEventListener('offline', connectivity); window.removeEventListener('hashchange', hash); };
   }, [guestView]);
-  function navigate(next: Tab) { setTab(next); location.hash = next === 'admin' ? 'organizar' : next === 'memories' ? 'recuerdos' : 'invitacion'; window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  function navigate(next: Tab) { setTab(next); location.hash = next === 'admin' ? 'organizar' : next === 'levels' ? 'niveles' : next === 'memories' ? 'recuerdos' : 'invitacion'; window.scrollTo({ top: 0, behavior: 'smooth' }); }
   const state = uploadState(party.event, now);
   function calendar() {
     const escape = (s: string) => s.replaceAll('\\', '\\\\').replaceAll('\n', '\\n').replaceAll(',', '\\,').replaceAll(';', '\\;');
@@ -58,7 +61,7 @@ export default function App() {
   const hasAlbum = party.profile?.role === 'admin' || party.profile?.album_verified === true;
   const previewEntrance = personal.preview ? new URLSearchParams(location.search).get('entrance') : null;
   const welcome = previewEntrance ? previewEntrance === 'welcome' : personal.invitation?.attending === true || now >= Date.parse(party.event.uploads_open_at);
-  return <>{!entryDone && tab !== 'admin' && party.loading && <div className="entry-loading" role="status"><span className="seal-ring">7</span><p>Preparando tu invitación…</p></div>}{!entryDone && tab !== 'admin' && !party.loading && !personal.error && <EntrySplash name={personal.invitation?.recipient_name ?? party.profile?.display_name} welcome={welcome} audio={audio} onDone={dismissEntry} />}<a className="skip-link" href="#main">Ir al contenido</a>
+  return <>{!entryDone && tab !== 'admin' && tab !== 'levels' && party.loading && <div className="entry-loading" role="status"><span className="seal-ring">7</span><p>Preparando tu invitación…</p></div>}{!entryDone && tab !== 'admin' && tab !== 'levels' && !party.loading && !personal.error && <EntrySplash name={personal.invitation?.recipient_name ?? party.profile?.display_name} welcome={welcome} audio={audio} onDone={dismissEntry} />}<a className="skip-link" href="#main">Ir al contenido</a>
     <header className="site-header"><div className="nav-inner"><a className="brand" href="#invitacion" onClick={() => navigate('invitation')} aria-label="Santiago nivel 7, inicio"><span className="brand-mark">S<span>7</span></span><span>SANTIAGO<small>UNA AVENTURA NIVEL 7</small></span></a><nav aria-label="Navegación principal"><button aria-current={tab === 'invitation' ? 'page' : undefined} className={tab === 'invitation' ? 'nav-link nav-dup active' : 'nav-link nav-dup'} onClick={() => navigate('invitation')}><Ticket size={17} />La invitación</button><button aria-current={tab === 'memories' ? 'page' : undefined} className={tab === 'memories' ? 'nav-link nav-dup active' : 'nav-link nav-dup'} onClick={() => navigate('memories')}><BookOpen size={17} />Recuerdos</button>{!guestView && party.profile?.role === 'admin' && <button className="nav-link" onClick={() => navigate('admin')}>Organizar</button>}</nav><a className="nav-rsvp" href={confirmed ? '#mi-wallet' : '#confirmar'} onClick={() => setTab('invitation')}>{confirmed ? 'Mi pase' : '¡Voy a la fiesta!'}<ArrowRight size={16} /></a></div></header>
     {!online && <div className="offline" role="status">Estás sin conexión. Puedes ver la invitación guardada; vuelve a conectarte para confirmar o compartir fotos.</div>}
     {!personal.preview && personal.error && <div className="guest-preview-banner link-error-banner" role="alert"><div><strong>Este enlace de invitación no funciona</strong><span>{personal.error}</span></div></div>}
@@ -78,6 +81,7 @@ export default function App() {
       </>}
       {tab === 'memories' && <><section className="album-hero"><span className="eyebrow">NUESTRA COLECCIÓN FAVORITA</span><h1>Recuerdos <span>nivel 7.</span></h1><p>Las mejores aventuras se viven juntos. Y se recuerdan aquí.</p><span className="album-status"><span className="live-dot" />{state === 'open' ? party.event.album_test_mode ? 'Muro abierto para pruebas' : '¡El álbum está abierto!' : state === 'soon' ? `Abrimos el ${niceDate(party.event.uploads_open_at)}` : 'La aventura queda guardada'}</span></section><section className="section album-section">{party.event.album_test_mode && <div className="personal-code" role="status"><strong>Estamos probando el muro</strong><p>Ya puedes subir fotos, comentar y dejar corazones con tu invitación personal. Las publicaciones son reales y quedan visibles para los invitados hasta que su autor o la organización las eliminen.</p></div>}<div className="album-info"><Image size={19} /><p>Fotos y comentarios de nuestra pandilla. Puedes publicar hasta el <b>{niceDate(new Date(Date.parse(party.event.uploads_close_at) - 1).toISOString())}</b>.</p></div>{party.loading ? <p>Cargando…</p> : personal.preview ? <div className="empty-state"><Camera size={36} /><h3>Los recuerdos de nuestra pandilla</h3><p>El invitado encontrará aquí las fotos y comentarios de la fiesta. La vista previa no publica ni modifica recuerdos.</p></div> : personal.error ? <p className="form-error" role="alert">{personal.error}</p> : state === 'soon' && party.profile?.role !== 'admin' ? <div className="empty-state"><Camera size={36} /><h3>¡Los recuerdos abren el 26 de septiembre!</h3><p>El día de la fiesta podrás compartir tus fotos, comentar y dejar corazones.</p></div> : party.profile && hasAlbum ? <><Suspense fallback={<p>Cargando álbum…</p>}><Feed profile={party.profile} event={party.event} /></Suspense></> : personal.invitation && personal.token ? <PersonalAlbumGate token={personal.token} name={personal.invitation.recipient_name} onJoined={party.refresh} /> : <GuestGate onJoined={party.refresh} />}</section></>}
       {tab === 'admin' && !guestView && <Suspense fallback={<p className="section">Cargando organización…</p>}><Admin profile={party.profile} event={party.event} details={party.details} refresh={party.refresh} /></Suspense>}
+      {tab === 'levels' && !guestView && (party.profile?.role === 'admin' ? <Suspense fallback={<p className="section">Cargando niveles anteriores…</p>}><LevelsShow tv={new URLSearchParams(location.search).get('tv') === '1'} /></Suspense> : party.loading ? <p className="section">Cargando…</p> : <section className="section"><div className="card gate"><p>«Niveles anteriores» es solo para la organización.</p><a className="button button-blue" href="#organizar">Entrar al panel</a></div></section>)}
       {party.error && <div className="connection-notice" role="alert">No pudimos actualizar la invitación. <button onClick={() => void party.refresh()}>Reintentar</button><small>{party.error}</small></div>}
       {notice && <p className="connection-notice" role="status">{notice}</p>}
     </main>

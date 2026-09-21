@@ -63,6 +63,15 @@ Comandos útiles:
 | `npm test` | Pruebas unitarias |
 | `npm run lint` | Verificación de tipos |
 | `npm run assets` | Regenera las imágenes optimizadas, la imagen social y los iconos |
+| `npm run niveles [carpeta]` | Prepara y sube la presentación «Niveles anteriores» (ver abajo) |
+
+## Niveles anteriores (presentación para la fiesta)
+
+Diapositivas con la historia del cumpleañero, música de fondo y, al cierre, los mensajes de las familias confirmadas. Solo la organización la ve, en `/#niveles`, pensada para proyectar en un televisor.
+
+1. Coloca en `.local/niveles/` las fotos y videos numerados en el orden deseado (`1.jpg`, `2.mp4`, `3.jpg`…) y las canciones también numeradas (`1.mp3`, `2.m4a`…). Leyendas opcionales en `leyendas.txt`, una por línea: `3: Nivel 2 · 2021`.
+2. Ejecuta `npm run niveles` (requiere `ffmpeg` en el PATH). Convierte todo a tamaño de proyección (fotos WebP 1920 px, video 720p H.264, audio AAC 96 k), lo sube a un bucket privado y sincroniza cambios: los archivos quitados de la carpeta se eliminan. Avisa si los videos superan los 2 minutos.
+3. En la web, con la cuenta de organización, pulsa **Preparar para la fiesta** en el equipo que irá al televisor: descarga una copia local y la presentación funciona aunque falle la conexión del lugar. `/?tv=1#niveles` la reproduce en bucle a pantalla completa.
 
 ## Configuración
 

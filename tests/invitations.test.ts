@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { formatGuestCode, invitationMessage, invitationStorageKey, invitationUrl, normalizePhone, whatsappUrl } from '../src/invitations';
+import { formatGuestCode, groupInvitations, invitationMessage, invitationStatus, invitationStorageKey, invitationUrl, normalizePhone, peopleSummary, whatsappUrl } from '../src/invitations';
+import type { InvitationRsvp } from '../src/invitations';
 
 describe('personal invitation sharing', () => {
   it('keeps themed words intact and still groups legacy hexadecimal codes', () => {
@@ -38,5 +39,35 @@ describe('personal invitation sharing', () => {
     expect(whatsappUrl('', 'Hola')).toBe('https://wa.me/?text=Hola');
     expect(normalizePhone('+56 9 1234 5678')).toBe('56912345678');
     expect(() => whatsappUrl('abc', 'Hola')).toThrow();
+  });
+});
+
+describe('invitation status grouping', () => {
+  const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
+  const rsvps: InvitationRsvp[] = [
+    { invitation_id: 'a', family_name: 'A', attending: true, adults: 2, children: 1, note: 'Llevamos torta' },
+    { invitation_id: 'b', family_name: 'B', attending: false, adults: 0, children: 0, note: '' },
+    { invitation_id: null, family_name: 'Legacy', attending: true, adults: 1, children: 3, note: '' },
+  ];
+  it('splits invitations into pending, confirmed and declined and keeps legacy responses apart', () => {
+    const groups = groupInvitations(rows, rsvps);
+    expect(groups.confirmed.map(r => r.id)).toEqual(['a']);
+    expect(groups.declined.map(r => r.id)).toEqual(['b']);
+    expect(groups.pending.map(r => r.id)).toEqual(['c', 'd']);
+    expect(groups.confirmed[0].rsvp?.note).toBe('Llevamos torta');
+    expect(groups.orphans.map(r => r.family_name)).toEqual(['Legacy']);
+  });
+  it('counts only attending families in the totals, including legacy responses', () => {
+    expect(groupInvitations(rows, rsvps).totals).toEqual({ families: 2, adults: 3, children: 4 });
+  });
+  it('drops a deleted invitation from every group once its rows are gone', () => {
+    const after = groupInvitations(rows.filter(r => r.id !== 'a'), rsvps.filter(r => r.invitation_id !== 'a'));
+    expect(after.confirmed).toEqual([]);
+    expect(after.totals).toEqual({ families: 1, adults: 1, children: 3 });
+  });
+  it('describes people in natural Spanish', () => {
+    expect(invitationStatus(null)).toBe('pending');
+    expect(peopleSummary({ invitation_id: 'a', family_name: 'A', attending: true, adults: 1, children: 1, note: '' })).toBe('1 adulto · 1 niño');
+    expect(peopleSummary({ invitation_id: 'a', family_name: 'A', attending: true, adults: 2, children: 0, note: '' })).toBe('2 adultos · 0 niños');
   });
 });

@@ -21,3 +21,26 @@ export function whatsappUrl(phone: string, message: string) {
   if (digits && !/^[1-9]\d{7,14}$/.test(digits)) throw new Error('Usa el número completo con código de país; por ejemplo +56912345678.');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
+export type InvitationRsvp = { invitation_id: string | null; family_name: string; attending: boolean; adults: number; children: number; note: string };
+export type InvitationStatus = 'pending' | 'confirmed' | 'declined';
+export type InvitationWithRsvp<T extends { id: string }> = T & { rsvp: InvitationRsvp | null; status: InvitationStatus };
+export function invitationStatus(rsvp: InvitationRsvp | null | undefined): InvitationStatus {
+  return !rsvp ? 'pending' : rsvp.attending ? 'confirmed' : 'declined';
+}
+/** Joins each invitation with its RSVP; `orphans` are legacy responses without an invitation. */
+export function groupInvitations<T extends { id: string }>(rows: T[], rsvps: InvitationRsvp[]) {
+  const byInvitation = new Map(rsvps.filter(r => r.invitation_id).map(r => [r.invitation_id as string, r]));
+  const joined: InvitationWithRsvp<T>[] = rows.map(row => { const rsvp = byInvitation.get(row.id) ?? null; return { ...row, rsvp, status: invitationStatus(rsvp) }; });
+  const attending = rsvps.filter(r => r.attending);
+  return {
+    pending: joined.filter(r => r.status === 'pending'),
+    confirmed: joined.filter(r => r.status === 'confirmed'),
+    declined: joined.filter(r => r.status === 'declined'),
+    orphans: rsvps.filter(r => !r.invitation_id),
+    totals: { families: attending.length, adults: attending.reduce((n, r) => n + r.adults, 0), children: attending.reduce((n, r) => n + r.children, 0) },
+  };
+}
+export function peopleSummary(rsvp: InvitationRsvp) {
+  const part = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  return `${part(rsvp.adults, 'adulto', 'adultos')} · ${part(rsvp.children, 'niño', 'niños')}`;
+}
