@@ -15,6 +15,7 @@ export default function LevelsShow({ tv }: { tv: boolean }) {
   const [phase, setPhase] = useState<Phase>('idle'); const [index, setIndex] = useState(0); const [loop, setLoop] = useState(tv);
   const [urls, setUrls] = useState<Record<string, string>>({}); const [track, setTrack] = useState(0);
   const [fullscreen, setFullscreen] = useState(false); const [controls, setControls] = useState(true); const [generation, setGeneration] = useState(0);
+  const [outgoing, setOutgoing] = useState<number | null>(null); const shown = useRef<number | null>(null);
   const stage = useRef<HTMLDivElement>(null); const music = useRef<HTMLAudioElement>(null); const video = useRef<HTMLVideoElement>(null);
   const urlCache = useRef(new Map<string, string>()); const remaining = useRef<{ index: number; left: number } | null>(null); const controlsTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const slides = useMemo(() => buildShow(moments, wishes), [moments, wishes]);
@@ -36,7 +37,7 @@ export default function LevelsShow({ tv }: { tv: boolean }) {
       try {
         const [rows, notes] = await Promise.all([
           db().from('moments').select('*').order('position'),
-          db().from('rsvps').select('family_name,note').eq('attending', true).neq('note', '').order('updated_at'),
+          db().from('rsvps').select('family_name,note').eq('attending', true).eq('wish_on_show', true).neq('note', '').order('updated_at'),
         ]);
         if (rows.error) throw rows.error; if (notes.error) throw notes.error;
         if (cancelled) return;
@@ -66,8 +67,16 @@ export default function LevelsShow({ tv }: { tv: boolean }) {
     const wanted: string[] = [];
     for (const s of [slides[index], slides[index + 1]]) if (s && (s.type === 'photo' || s.type === 'video')) wanted.push(s.moment.storage_path, ...(s.moment.poster_path ? [s.moment.poster_path] : []));
     if (playlist[track]) wanted.push(playlist[track].storage_path);
-    wanted.forEach(path => { void resolve(path).catch(e => setError(errorMessage(e))); });
+    wanted.forEach(path => { void resolve(path).then(url => { if (/\.webp$/.test(path)) { const img = new Image(); img.src = url; } }).catch(e => setError(errorMessage(e))); });
   }, [slides, index, playlist, track, resolve, phase, ready, generation]);
+  // Keep the previous slide underneath for a moment so photos cross-fade over each other.
+  useEffect(() => {
+    if (phase === 'idle') { shown.current = null; setOutgoing(null); return; }
+    const previous = shown.current; shown.current = index;
+    if (previous === null || previous === index) return;
+    setOutgoing(previous); const timer = setTimeout(() => setOutgoing(null), 700);
+    return () => clearTimeout(timer);
+  }, [index, phase]);
 
   async function prepare() {
     if (!hasCache()) { setError('Este navegador no permite guardar una copia local. Usa Chrome o Edge en el notebook.'); return; }
@@ -112,15 +121,14 @@ export default function LevelsShow({ tv }: { tv: boolean }) {
     return () => { clearTimeout(timer); remaining.current = { index, left: Math.max(0, wait - (Date.now() - startedAt)) }; };
   }, [phase, slide, index, next]);
   useEffect(() => { if (slide.type !== 'video') return; const el = video.current; if (!el) return; if (phase === 'playing') void el.play().catch(() => undefined); else el.pause(); }, [phase, slide, index]);
-  // Background music: plays in order, loops, fades at track edges and ducks under videos.
-  const ducked = phase === 'playing' && slide.type === 'video';
+  // Background music carries the whole show; videos play muted underneath it.
+  const ducked = false;
   const trackUrl = playlist[track] ? urls[playlist[track].storage_path] : undefined;
   useEffect(() => {
     const el = music.current; if (!el || !trackUrl) return;
     if (el.src !== trackUrl) { el.src = trackUrl; el.load(); }
     if (phase === 'playing') void el.play().catch(() => undefined); else el.pause();
   }, [trackUrl, phase]);
-  useEffect(() => { const el = music.current; if (el) el.volume = musicVolume(el.currentTime, el.duration, ducked); }, [ducked]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (phase === 'idle' || (e.target as HTMLElement)?.tagName === 'INPUT') return;
@@ -133,9 +141,22 @@ export default function LevelsShow({ tv }: { tv: boolean }) {
   async function toggleFullscreen() { if (document.fullscreenElement) await document.exitFullscreen(); else await stage.current?.requestFullscreen(); }
   function wake() { setControls(true); clearTimeout(controlsTimer.current); controlsTimer.current = setTimeout(() => setControls(false), 3000); }
 
-  const mediaUrl = slide.type === 'photo' || slide.type === 'video' ? urls[slide.moment.storage_path] : undefined;
-  const posterUrl = slide.type === 'video' && slide.moment.poster_path ? urls[slide.moment.poster_path] : undefined;
   const progress = slides.length > 1 ? Math.round((index / (slides.length - 1)) * 100) : 0;
+  // The same keyed node is reused when a slide becomes the outgoing layer, so a photo keeps its
+  // motion and a video its last frame while the next slide fades in over it.
+  const renderSlide = (i: number, current: boolean) => {
+    const s = slides[i]; const url = s.type === 'photo' || s.type === 'video' ? urls[s.moment.storage_path] : undefined; const poster = s.type === 'video' && s.moment.poster_path ? urls[s.moment.poster_path] : undefined;
+    return <div className={current ? 'levels-slide' : 'levels-slide is-outgoing'} key={i} data-type={s.type} data-outgoing={current ? undefined : 'true'} aria-hidden={!current}>
+      {s.type === 'title' && <div className="levels-card levels-title"><span className="levels-ring" /><span className="levels-kicker">SANTIAGO</span><h1>Niveles<br />anteriores</h1><p>Del nivel 1 al 6 · rumbo al nivel 7</p></div>}
+      {s.type === 'photo' && (url ? <><img className="levels-backdrop" src={url} alt="" aria-hidden="true" /><img className={`levels-photo kb-${i % 4}`} src={url} alt={s.moment.caption || `Momento ${s.index + 1}`} /></> : <div className="levels-loading"><LoaderCircle className="spin" /></div>)}
+      {s.type === 'video' && poster && <img className="levels-backdrop" src={poster} alt="" aria-hidden="true" />}
+      {s.type === 'video' && (url ? <video ref={current ? video : undefined} className="levels-video" src={url} poster={poster} playsInline autoPlay muted onEnded={current ? next : undefined} onError={() => setError('No se pudo reproducir un video. Revisa la copia local o la conexión.')} /> : <div className="levels-loading"><LoaderCircle className="spin" /></div>)}
+      {(s.type === 'photo' || s.type === 'video') && <div className="levels-caption"><span>{s.index + 1} / {s.total}</span>{s.moment.caption && <strong>{s.moment.caption}</strong>}</div>}
+      {s.type === 'wishes-title' && <div className="levels-card levels-title"><span className="levels-kicker">CAPÍTULO FINAL</span><h1>Lo que dijeron<br />los invitados</h1><p>{s.count} {s.count === 1 ? 'mensaje' : 'mensajes'} al confirmar</p></div>}
+      {s.type === 'wish' && <div className="levels-card levels-wish"><blockquote>«{s.wish.note}»</blockquote><cite>— {s.wish.family_name}</cite><small>{s.index + 1} / {s.total}</small></div>}
+      {s.type === 'outro' && <div className="levels-card levels-title levels-outro"><span className="levels-kicker">¡AHORA ES TU TURNO!</span><h1>Sube tu momento<br />de hoy</h1><p>Abre tu invitación → <strong>Recuerdos</strong> → <strong>Publicar foto</strong></p><span className="levels-url">santiago.teolabs.app</span></div>}
+    </div>;
+  };
   if (loading) return <section className="section levels-page"><p>Cargando niveles anteriores…</p></section>;
   return <section className="section levels-page">
     <div className="levels-heading"><div><span className="eyebrow">NIVELES ANTERIORES</span><h2>Del nivel 1 al 6</h2><p>La historia de Santiago hasta hoy, para proyectar en la fiesta y abrir el álbum de recuerdos.</p></div>
@@ -148,16 +169,9 @@ export default function LevelsShow({ tv }: { tv: boolean }) {
           : <><Download size={18} /><span><strong>{cached.size ? `Faltan ${paths.length - cached.size} archivos por guardar.` : 'Aún no hay copia local.'}</strong> Descárgala en el equipo que conectarás al televisor para no depender del WiFi del local.</span><button className="button button-blue" onClick={() => void prepare()}>Preparar para la fiesta</button></>}
       </div>
       <div ref={stage} className={`levels-stage ${fullscreen ? 'is-fullscreen' : ''} ${controls || phase !== 'playing' ? 'show-controls' : 'hide-cursor'}`} onMouseMove={wake} onClick={() => { if (phase === 'playing' || phase === 'paused') { wake(); } }} aria-label="Presentación Niveles anteriores">
-        <audio ref={music} preload="auto" onEnded={() => setTrack(t => playlist.length ? (t + 1) % playlist.length : 0)} onTimeUpdate={e => { const el = e.currentTarget; el.volume = musicVolume(el.currentTime, el.duration, ducked); }} />
-        {phase !== 'idle' && <div className="levels-slide" key={index} data-type={slide.type}>
-          {slide.type === 'title' && <div className="levels-card levels-title"><span className="levels-ring" /><span className="levels-kicker">SANTIAGO</span><h1>Niveles<br />anteriores</h1><p>Del nivel 1 al 6 · rumbo al nivel 7</p></div>}
-          {slide.type === 'photo' && (mediaUrl ? <img className={`levels-photo kb-${index % 4}`} src={mediaUrl} alt={slide.moment.caption || `Momento ${slide.index + 1}`} /> : <div className="levels-loading"><LoaderCircle className="spin" /></div>)}
-          {slide.type === 'video' && (mediaUrl ? <video ref={video} className="levels-video" src={mediaUrl} poster={posterUrl} playsInline autoPlay onEnded={next} onError={() => setError('No se pudo reproducir un video. Revisa la copia local o la conexión.')} /> : <div className="levels-loading"><LoaderCircle className="spin" /></div>)}
-          {(slide.type === 'photo' || slide.type === 'video') && <div className="levels-caption"><span>{slide.index + 1} / {slide.total}</span>{slide.moment.caption && <strong>{slide.moment.caption}</strong>}</div>}
-          {slide.type === 'wishes-title' && <div className="levels-card levels-title"><span className="levels-kicker">CAPÍTULO FINAL</span><h1>Lo que dijeron<br />los invitados</h1><p>{slide.count} {slide.count === 1 ? 'mensaje' : 'mensajes'} al confirmar</p></div>}
-          {slide.type === 'wish' && <div className="levels-card levels-wish"><blockquote>«{slide.wish.note}»</blockquote><cite>— {slide.wish.family_name}</cite><small>{slide.index + 1} / {slide.total}</small></div>}
-          {slide.type === 'outro' && <div className="levels-card levels-title levels-outro"><span className="levels-kicker">¡AHORA ES TU TURNO!</span><h1>Sube tu momento<br />de hoy</h1><p>Abre tu invitación → <strong>Recuerdos</strong> → <strong>Publicar foto</strong></p><span className="levels-url">santiago.teolabs.app</span></div>}
-        </div>}
+        <audio ref={music} preload="auto" onEnded={e => { const el = e.currentTarget; const following = playlist.length ? (track + 1) % playlist.length : 0; if (following === track) { el.currentTime = 0; void el.play().catch(() => undefined); } else setTrack(following); }} onTimeUpdate={e => { const el = e.currentTarget; el.volume = musicVolume(el.currentTime, el.duration, ducked); }} />
+        {phase !== 'idle' && outgoing !== null && outgoing !== index && slides[outgoing] && renderSlide(outgoing, false)}
+        {phase !== 'idle' && renderSlide(index, true)}
         {phase === 'idle' && <div className="levels-start"><span className="levels-ring" /><h3>Niveles anteriores</h3><p>{tv ? 'Modo TV: se reproduce en bucle a pantalla completa.' : 'Pulsa para comenzar con música.'}</p><button className="button button-yellow" onClick={() => void start()}><Play size={20} />Comenzar</button></div>}
         {phase === 'ended' && <div className="levels-start"><h3>Fin de los niveles anteriores</h3><p>¡Que empiece el nivel 7!</p><button className="button button-yellow" onClick={() => void start()}><RotateCcw size={20} />Volver a empezar</button></div>}
         {phase !== 'idle' && <div className="levels-controls" onClick={e => e.stopPropagation()}><div className="levels-progress"><i style={{ width: `${progress}%` }} /></div>
@@ -169,3 +183,4 @@ export default function LevelsShow({ tv }: { tv: boolean }) {
     </>}
   </section>;
 }
+

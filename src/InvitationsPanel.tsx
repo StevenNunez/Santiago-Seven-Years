@@ -33,7 +33,7 @@ export default function InvitationsPanel({ event, details, onDeleted }: { event:
   const refresh = useCallback(async () => {
     const [invitations, responses] = await Promise.all([
       db().from('invitations').select('*').order('created_at', { ascending: false }),
-      db().from('rsvps').select('invitation_id,family_name,attending,adults,children,note').order('updated_at', { ascending: false }),
+      db().from('rsvps').select('invitation_id,family_name,attending,adults,children,note,wish_on_show').order('updated_at', { ascending: false }),
     ]);
     if (invitations.error) throw invitations.error; if (responses.error) throw responses.error;
     setRows(invitations.data ?? []); setRsvps(responses.data ?? []); setLoaded(true);
@@ -64,6 +64,7 @@ export default function InvitationsPanel({ event, details, onDeleted }: { event:
       onToggle={() => void act(async () => { const { error } = await db().from('invitations').update({ active: !row.active }).eq('id', row.id); if (error) throw error; await refresh(); })}
       onCopy={() => void act(async () => { const link = shareLink(row); try { await navigator.clipboard.writeText(link); setNotice(`Enlace de ${row.recipient_name} copiado.`); } catch { setManualCopy(link); setNotice('Copia el enlace del campo que aparece arriba.'); } })}
       onMail={() => setMail(row)} shareLink={shareLink(row)}
+      onWishToggle={show => { setRsvps(list => list.map(r => r.invitation_id === row.id ? { ...r, wish_on_show: show } : r)); void act(async () => { const { error } = await db().from('rsvps').update({ wish_on_show: show }).eq('invitation_id', row.id); if (error) { await refresh(); throw error; } }); }}
       onDeleted={async outcome => { if (editing === row.id) { setEditing(null); setForm(empty); } if (mail?.id === row.id) setMail(null); setManualCopy(''); setError(''); setNotice(''); await refresh(); await onDeleted(); window.dispatchEvent(new Event('invitations-changed'));
         if (outcome.cleanupPending) showToast('warning', `La invitación de ${outcome.name} ya no da acceso`, 'Quedó pendiente borrar sus archivos o invalidar su pase Wallet. Usa «Completar eliminación» más arriba.');
         else showToast('success', `Invitación de ${outcome.name} eliminada`, row.status === 'confirmed' ? 'Su confirmación y sus cantidades ya no cuentan en los totales.' : 'Su enlace y código dejaron de funcionar.'); }}
@@ -81,11 +82,12 @@ export default function InvitationsPanel({ event, details, onDeleted }: { event:
   </section>;
 }
 
-type RowProps = { row: InvitationWithRsvp<Invitation>; busy: boolean; local: boolean; testMode: boolean; shareLink: string; onEdit: () => void; onToggle: () => void; onCopy: () => void; onMail: () => void; onDeleted: (outcome: { name: string; cleanupPending: boolean }) => Promise<void>; onDeleteError: (message: string) => void };
-function InvitationRow({ row, busy, local, testMode, shareLink, onEdit, onToggle, onCopy, onMail, onDeleted, onDeleteError }: RowProps) {
+type RowProps = { row: InvitationWithRsvp<Invitation>; busy: boolean; local: boolean; testMode: boolean; shareLink: string; onEdit: () => void; onToggle: () => void; onCopy: () => void; onMail: () => void; onDeleted: (outcome: { name: string; cleanupPending: boolean }) => Promise<void>; onDeleteError: (message: string) => void; onWishToggle: (show: boolean) => void };
+function InvitationRow({ row, busy, local, testMode, shareLink, onEdit, onToggle, onCopy, onMail, onDeleted, onDeleteError, onWishToggle }: RowProps) {
   return <article className={`invitation-row status-${row.status}`}><div className="invitation-recipient"><span className="avatar">{row.recipient_name.slice(0, 1)}</span><div><strong>{row.recipient_name}<span className={`status-pill status-${row.status}`}>{statusLabel[row.status]}</span></strong>
     {row.rsvp && row.status === 'confirmed' && <small className="invitation-people"><Users size={13} />{peopleSummary(row.rsvp)}</small>}
     {row.rsvp?.note && <small className="invitation-note">«{row.rsvp.note}»</small>}
+    {row.rsvp?.note && row.status === 'confirmed' && <label className="checkbox invitation-wish"><input type="checkbox" checked={row.rsvp.wish_on_show !== false} onChange={e => onWishToggle(e.target.checked)} />Mostrar en «Niveles anteriores»</label>}
     <small>{row.access_code ? `Código personal: ${formatGuestCode(row.access_code)}` : ''}</small>
     <small>{row.checked_in_at ? `Llegada indicada: ${new Date(row.checked_in_at).toLocaleString('es-CL')}` : 'Sin registro de llegada'}</small>
     <small>{row.email || 'Sin correo'}{row.phone ? ` · +${row.phone}` : ''}</small>

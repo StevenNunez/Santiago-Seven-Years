@@ -25,7 +25,9 @@ const kinds = { photo: ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'], vid
 function orderKey(name) { const m = /^(\d+)/.exec(name); return [m ? Number(m[1]) : Number.MAX_SAFE_INTEGER, name.toLowerCase()]; }
 function byOrder(a, b) { const [na, sa] = orderKey(a), [nb, sb] = orderKey(b); return na - nb || sa.localeCompare(sb); }
 function kindOf(file) { const ext = extname(file).toLowerCase(); return Object.keys(kinds).find(k => kinds[k].includes(ext)); }
-function hashOf(file) { return createHash('sha1').update(readFileSync(file)).digest('hex').slice(0, 10); }
+// Encoder settings are part of the hash so changing them re-encodes only that kind of file.
+const PROFILE = { photo: 'p1', video: 'v2', music: 'a1' };
+function hashOf(file, kind) { return createHash('sha1').update(readFileSync(file)).update(PROFILE[kind]).digest('hex').slice(0, 10); }
 function mmss(ms) { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 function mb(bytes) { return `${(bytes / 1048576).toFixed(1)} MB`; }
 async function probe(file) {
@@ -43,9 +45,9 @@ if (!files.length) { console.error('La carpeta no tiene fotos, videos ni cancion
 
 // Desired state, derived only from the folder. Output names carry a content hash so a replaced file gets a new path.
 const desired = [];
-media.forEach((file, i) => { const kind = kindOf(file); const hash = hashOf(join(folder, file)); const n = String(i + 1).padStart(3, '0');
+media.forEach((file, i) => { const kind = kindOf(file); const hash = hashOf(join(folder, file), kind); const n = String(i + 1).padStart(3, '0');
   desired.push({ kind, position: i + 1, file, hash, caption: captions.get(orderKey(file)[0]) ?? '', storage_path: `niveles/${n}-${hash}.${kind === 'photo' ? 'webp' : 'mp4'}`, poster_path: kind === 'video' ? `niveles/${n}-${hash}.poster.webp` : null }); });
-music.forEach((file, i) => { const hash = hashOf(join(folder, file)); const n = String(i + 1).padStart(3, '0');
+music.forEach((file, i) => { const hash = hashOf(join(folder, file), 'music'); const n = String(i + 1).padStart(3, '0');
   desired.push({ kind: 'music', position: i + 1, file, hash, caption: basename(file, extname(file)).replace(/^\d+[\s._-]*/, ''), storage_path: `musica/${n}-${hash}.m4a`, poster_path: null }); });
 
 const { data: existing, error: readError } = await supabase.from('moments').select('*'); if (readError) throw readError;
@@ -78,7 +80,7 @@ for (const item of desired) {
       const { error } = await supabase.storage.from('moments').upload(item.storage_path, image, { contentType: 'image/webp', upsert: true }); if (error) throw error;
       meta = { duration_ms: 0, width: info.width ?? null, height: info.height ?? null, bytes: image.length };
     } else if (item.kind === 'video') {
-      if (!existsSync(out)) await run('ffmpeg', ['-y', '-v', 'error', '-i', source, '-vf', "scale='min(1280,iw)':-2", '-c:v', 'libx264', '-preset', 'slow', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-c:a', 'aac', '-b:a', '96k', '-ac', '2', out]);
+      if (!existsSync(out)) await run('ffmpeg', ['-y', '-v', 'error', '-i', source, '-vf', "scale='min(1280,iw)':-2,fps=30", '-c:v', 'libx264', '-preset', 'slow', '-crf', '26', '-maxrate', '3M', '-bufsize', '6M', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-c:a', 'aac', '-b:a', '96k', '-ac', '2', out]);
       const poster = out.replace(/\.mp4$/, '.poster.webp');
       if (!existsSync(poster)) await run('ffmpeg', ['-y', '-v', 'error', '-ss', '1', '-i', out, '-frames:v', '1', '-vf', 'scale=640:-2', '-c:v', 'libwebp', '-quality', '75', poster]);
       const info = await probe(out); const bytes = statSync(out).size;

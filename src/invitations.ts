@@ -21,7 +21,7 @@ export function whatsappUrl(phone: string, message: string) {
   if (digits && !/^[1-9]\d{7,14}$/.test(digits)) throw new Error('Usa el número completo con código de país; por ejemplo +56912345678.');
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
-export type InvitationRsvp = { invitation_id: string | null; family_name: string; attending: boolean; adults: number; children: number; note: string };
+export type InvitationRsvp = { invitation_id: string | null; family_name: string; attending: boolean; adults: number; children: number; note: string; wish_on_show?: boolean };
 export type InvitationStatus = 'pending' | 'confirmed' | 'declined';
 export type InvitationWithRsvp<T extends { id: string }> = T & { rsvp: InvitationRsvp | null; status: InvitationStatus };
 export function invitationStatus(rsvp: InvitationRsvp | null | undefined): InvitationStatus {

@@ -14,15 +14,18 @@
 .levels-stage{position:relative;aspect-ratio:16/9;width:100%;background:#050c1f;border-radius:18px;overflow:hidden;color:#fff;box-shadow:0 30px 80px #0b1d4a33;user-select:none;font-family:'Outfit Variable',sans-serif}
 .levels-stage.is-fullscreen{border-radius:0;aspect-ratio:auto;width:100vw;height:100vh}
 .levels-stage.hide-cursor{cursor:none}
-.levels-slide{position:absolute;inset:0;display:grid;place-items:center;animation:levels-enter .9s ease-out both;background:radial-gradient(ellipse at 50% 40%,#12308a 0%,#071640 55%,#03081c 100%)}
+.levels-slide{position:absolute;inset:0;display:grid;place-items:center;animation:levels-enter .6s ease-out both;background:radial-gradient(ellipse at 50% 40%,#12308a 0%,#071640 55%,#03081c 100%)}
 @keyframes levels-enter{from{opacity:0}to{opacity:1}}
-.levels-photo{width:100%;height:100%;object-fit:contain;animation-duration:7s;animation-timing-function:ease-in-out;animation-fill-mode:both;transform-origin:center}
+.levels-slide.is-outgoing{animation:none;z-index:0}.levels-slide:not(.is-outgoing){z-index:1}
+.levels-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;animation-duration:4s;animation-timing-function:ease-in-out;animation-fill-mode:both;transform-origin:center}
 .levels-photo.kb-0{animation-name:kb-in}.levels-photo.kb-1{animation-name:kb-left}.levels-photo.kb-2{animation-name:kb-out}.levels-photo.kb-3{animation-name:kb-right}
 @keyframes kb-in{from{transform:scale(1)}to{transform:scale(1.08)}}
 @keyframes kb-out{from{transform:scale(1.08)}to{transform:scale(1)}}
 @keyframes kb-left{from{transform:scale(1.06) translateX(1.5%)}to{transform:scale(1.06) translateX(-1.5%)}}
 @keyframes kb-right{from{transform:scale(1.06) translateX(-1.5%)}to{transform:scale(1.06) translateX(1.5%)}}
-.levels-video{width:100%;height:100%;object-fit:contain;background:#000}
+.levels-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:transparent}
+/* Blurred copy behind portrait photos and videos fills the 16:9 frame instead of dark bars. */
+.levels-backdrop{position:absolute;inset:-6%;width:112%;height:112%;object-fit:cover;filter:blur(28px) brightness(.55) saturate(1.2);pointer-events:none}
 .levels-loading{color:#ffffff80}.levels-loading svg{width:44px;height:44px}
 .levels-caption{position:absolute;left:4%;bottom:6%;display:flex;flex-direction:column;gap:6px;max-width:60%;text-shadow:0 2px 14px #000c;animation:levels-caption .8s .4s ease-out both}
 .levels-caption span{font-size:clamp(11px,1.2vw,16px);letter-spacing:2px;font-weight:800;color:var(--yellow)}
@@ -40,11 +43,11 @@
 .levels-wish cite{display:block;font-style:normal;font-size:clamp(14px,2vw,28px);font-weight:800;color:var(--yellow)}
 .levels-wish small{display:block;margin-top:2vw;font-size:clamp(10px,1.1vw,15px);letter-spacing:2px;color:#8ea4dd}
 .levels-outro .levels-url{display:inline-block;margin-top:2.5vw;font-size:clamp(14px,2.2vw,30px);font-weight:900;letter-spacing:1px;background:var(--yellow);color:#132854;padding:.6em 1.4em;border-radius:999px}
-.levels-start{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;background:radial-gradient(ellipse at 50% 40%,#12308a 0%,#071640 55%,#03081c 100%);padding:20px}
+.levels-start{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;background:radial-gradient(ellipse at 50% 40%,#12308a 0%,#071640 55%,#03081c 100%);padding:20px}
 .levels-start h3{font-size:clamp(26px,4vw,52px);color:#fff;margin:0 0 4px;letter-spacing:-1px}
 .levels-start p{color:#b9c9f5;font-size:clamp(12px,1.4vw,17px);margin:0 0 14px}
 .levels-start .button{font-size:clamp(13px,1.4vw,18px)}
-.levels-controls{position:absolute;left:0;right:0;bottom:0;padding:14px 18px 12px;background:linear-gradient(transparent,#000000b0);opacity:0;transition:opacity .3s;font-family:'Nunito Variable',sans-serif}
+.levels-controls{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:14px 18px 12px;background:linear-gradient(transparent,#000000b0);opacity:0;transition:opacity .3s;font-family:'Nunito Variable',sans-serif}
 .show-controls .levels-controls{opacity:1}
 .levels-progress{height:4px;background:#ffffff33;border-radius:2px;overflow:hidden;margin-bottom:10px}.levels-progress i{display:block;height:100%;background:var(--yellow);transition:width .4s}
 .levels-buttons{display:flex;align-items:center;gap:6px}

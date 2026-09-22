@@ -21,6 +21,7 @@
 .invitation-row.status-declined .avatar{background:#fde4e8;color:#9d2240}
 .invitation-people{display:flex!important;align-items:center;gap:5px;color:#196845;font-weight:800;font-size:12px!important;margin:4px 0 2px}
 .invitation-note{color:#44516a;font-style:italic;white-space:pre-wrap}
+.invitation-wish{font-size:11px!important;margin:6px 0 4px;color:#4a5a7a;gap:8px}.invitation-wish input{width:15px;height:15px;accent-color:var(--blue)}
 .invitation-orphans{margin-top:28px;padding-top:20px;border-top:1px solid #e9edf5}.invitation-orphans h4{font-family:'Outfit Variable',sans-serif;font-size:16px;margin:0 0 10px}.invitation-orphans .form-note{margin-bottom:10px}
 .button-remove{color:#9d2240}.button-remove:hover:not(:disabled){background:#fff0f1}
 .confirm-invitation{text-align:left}.confirm-invitation strong{display:block;font-family:'Outfit Variable',sans-serif;font-size:18px;margin-bottom:8px;overflow-wrap:anywhere}.confirm-invitation p{font-size:13px;color:#d6e0f5;margin-bottom:6px}.confirm-invitation small{display:block;color:#ffcf38;font-size:11px;font-weight:800;margin-bottom:16px}.confirm-invitation .button-danger{flex:1}

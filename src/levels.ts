@@ -8,7 +8,7 @@ export type Slide =
   | { type: 'wishes-title'; count: number }
   | { type: 'wish'; wish: Wish; index: number; total: number }
   | { type: 'outro' };
-export const TITLE_MS = 4500; export const PHOTO_MS = 5000; export const WISHES_TITLE_MS = 3500; export const WISH_MS = 6500; export const OUTRO_MS = 12000;
+export const TITLE_MS = 4000; export const PHOTO_MS = 4000; export const WISHES_TITLE_MS = 3500; export const WISH_MS = 6500; export const OUTRO_MS = 12000;
 export const CACHE_NAME = 'niveles-anteriores-v1';
 export const cacheKey = (path: string) => `/niveles-cache/${path}`;
 
@@ -50,7 +50,7 @@ export function showStats(moments: Moment[]) {
 }
 export function mmss(ms: number) { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 export function megabytes(bytes: number) { return `${(bytes / 1048576).toFixed(bytes < 10 * 1048576 ? 1 : 0)} MB`; }
-/** Music volume: fades at track edges and ducks under a video's own sound. */
+/** Music volume: fades at track edges; `ducked` lowers it under other audio when wanted. */
 export function musicVolume(time: number, duration: number, ducked: boolean, base = 0.9) {
   const fade = Number.isFinite(duration) && duration > 0 ? Math.max(0, Math.min(1, time / 2, (duration - time) / 2)) : 1;
   return Math.max(0, Math.min(1, base * fade * (ducked ? 0.12 : 1)));
